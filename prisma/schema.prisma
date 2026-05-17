@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id             String          @id @default(cuid())
+  name           String
+  phone          String?         @unique
+  email          String?         @unique
+  cnib           String?         @unique
+  avatarUrl      String?
+  emailVerified  Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  bookings       Booking[]
+  packages       Package[]
+  otpCodes       OtpCode[]
+  notifications  Notification[]
+  loyalty        LoyaltyAccount?
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Company {
+  id                       String    @id
+  name                     String
+  shortName                String
+  color                    String
+  phone                    String?
+  email                    String?
+  description              String?
+  schedules                String?
+  supportsReservation      Boolean   @default(true)
+  requiresImmediatePayment Boolean   @default(false)
+  isFeatured               Boolean   @default(false)
+  featuredOrder            Int?
+  featuredUntil            DateTime?
+  maxBookingDaysAhead      Int       @default(30)
+  trips                    Trip[]
+  packages                 Package[]
+}
+
+model City {
+  id       String @id
+  name     String @unique
+  stations String
+}
+
+model Trip {
+  id            String    @id @default(cuid())
+  companyId     String
+  company       Company   @relation(fields: [companyId], references: [id])
+  from          String
+  to            String
+  fromStation   String
+  toStation     String
+  departureTime String
+  arrivalTime   String
+  duration      String
+  price         Int
+  totalSeats    Int
+  date          String
+  bookings      Booking[]
+  createdAt     DateTime  @default(now())
+}
+
+model Booking {
+  id                   String    @id @default(cuid())
+  userId               String
+  user                 User      @relation(fields: [userId], references: [id])
+  tripId               String
+  trip                 Trip      @relation(fields: [tripId], references: [id])
+  passengerName        String
+  passengerPhone       String
+  passengerCnib        String?
+  seatNumber           Int
+  price                Int
+  status               String    @default("active")
+  bookingReference     String    @unique
+  isRoundTrip          Boolean   @default(false)
+  returnDate           String?
+  returnDepartureTime  String?
+  returnArrivalTime    String?
+  returnSeatNumber     Int?
+  paymentId            String?
+  payment              Payment?  @relation(fields: [paymentId], references: [id])
+  baggageWeight        String?
+  reservationExpiresAt DateTime?
+  returnBookingId      String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+}
+
+model Payment {
+  id        String    @id @default(cuid())
+  amount    Int
+  provider  String
+  status    String    @default("pending")
+  reference String    @unique
+  bookings  Booking[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Package {
+  id             String        @id @default(cuid())
+  reference      String        @unique
+  userId         String
+  user           User          @relation(fields: [userId], references: [id])
+  companyId      String
+  company        Company       @relation(fields: [companyId], references: [id])
+  from           String
+  to             String
+  fromStation    String
+  toStation      String
+  senderName     String
+  senderPhone    String
+  recipientName  String
+  recipientPhone String
+  description    String
+  weight         String
+  price          Int
+  status         String        @default("en_cours")
+  date           String
+  steps          PackageStep[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  linkTo    String?
+  linkParams String?
+  createdAt DateTime @default(now())
+}
+
+model PackageStep {
+  id        Int     @id @default(autoincrement())
+  packageId String
+  package   Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  label     String
+  date      String?
+  completed Boolean @default(false)
+  active    Boolean @default(false)
+  order     Int
+}
+
+model LoyaltyAccount {
+  id           String               @id @default(cuid())
+  userId       String               @unique
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  points       Int                  @default(0)
+  totalEarned  Int                  @default(0)
+  level        String               @default("bronze")
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  transactions LoyaltyTransaction[]
+}
+
+model LoyaltyTransaction {
+  id          String         @id @default(cuid())
+  accountId   String
+  account     LoyaltyAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  bookingId   String?
+  type        String
+  points      Int
+  description String
+  createdAt   DateTime       @default(now())
+}
