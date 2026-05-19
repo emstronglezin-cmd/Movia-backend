@@ -32,14 +32,26 @@ export class VerifyOtpHandler implements ICommandHandler<VerifyOtpCommand> {
     const payload = { sub: user.id, phone: user.phone ?? null, email: user.email ?? null };
     const token = this.jwtService.sign(payload);
 
+    const userData = {
+      id: user.id,
+      name: user.name,
+      phone: user.phone ?? null,
+      email: user.email ?? null,
+      avatarUrl: (user as any).avatarUrl ?? null,
+      emailVerified: (user as any).emailVerified ?? false,
+      cnib: (user as any).cnib ?? null,
+    };
+
+    // Retourne les DEUX formats pour compatibilité totale :
+    // - App Client Flutter lit: result['token'] + result['user']
+    // - App Contrôleur Flutter lit: result['tokens']['accessToken'] + result['user']
     return {
-      token,
-      user: {
-        id: user.id,
-        name: user.name,
-        phone: user.phone ?? null,
-        email: user.email ?? null,
+      token,                          // format client Flutter
+      tokens: {                       // format contrôleur Flutter
+        accessToken: token,
+        refreshToken: null,
       },
+      user: userData,
     };
   }
 }
