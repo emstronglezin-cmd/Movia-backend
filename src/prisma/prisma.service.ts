@@ -1,20 +1,22 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
-    super();
+    // Prisma 7 avec engine "client" nécessite un driver adapter
+    // PrismaPg lit DATABASE_URL automatiquement depuis process.env
+    const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+    super({ adapter });
   }
 
   async onModuleInit() {
     await this.$connect();
     this.logger.log('✅ Database connected');
-    // Auto-migrate: crée les tables si elles n'existent pas
     await this.autoMigrate();
-    // Auto-seed: insère les données de base si vides
     await this.autoSeed();
   }
 
@@ -24,11 +26,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   /**
    * Crée toutes les tables PostgreSQL si elles n'existent pas encore.
-   * S'exécute automatiquement au démarrage du service.
+   * S'exécute automatiquement au démarrage.
    */
-  private async autoMigrate() {
+  async autoMigrate() {
     try {
-      // Vérifier si la table User existe
       const result = await this.$queryRaw<Array<{ count: bigint }>>`
         SELECT COUNT(*) as count
         FROM information_schema.tables
@@ -210,7 +211,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
           "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
           CONSTRAINT "LoyaltyTransaction_pkey" PRIMARY KEY ("id")
         )`,
-        // Foreign Keys
         `DO $$ BEGIN
           IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'OtpCode_userId_fkey') THEN
             ALTER TABLE "OtpCode" ADD CONSTRAINT "OtpCode_userId_fkey"
@@ -284,7 +284,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
           await this.$executeRawUnsafe(sql);
         } catch (e: any) {
           if (!e.message?.includes('already exists')) {
-            this.logger.warn(`SQL warning: ${e.message?.substring(0, 100)}`);
+            this.logger.warn(`SQL warning: ${e.message?.substring(0, 120)}`);
           }
         }
       }
@@ -296,9 +296,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   /**
-   * Insère les données de base (companies, cities, trips) si la DB est vide.
+   * Insère les données de base si la DB est vide.
    */
-  private async autoSeed() {
+  async autoSeed() {
     try {
       const companyCount = await this.company.count().catch(() => 0);
       if (companyCount > 0) {
@@ -309,7 +309,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       this.logger.log('🌱 Seeding database...');
       const today = new Date();
 
-      // Companies
       const companies = [
         { id: 'saramaya', name: 'Saramaya', shortName: 'Saramaya', color: '#D4380D', supportsReservation: true, requiresImmediatePayment: false, isFeatured: true, featuredOrder: 1, maxBookingDaysAhead: 14 },
         { id: 'elitis', name: 'Elitis Transport', shortName: 'Elitis', color: '#C0392B', supportsReservation: true, requiresImmediatePayment: false, isFeatured: true, featuredOrder: 2, maxBookingDaysAhead: 28 },
@@ -321,7 +320,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         await this.company.upsert({ where: { id: c.id }, update: {}, create: { ...c, schedules: '[]', description: c.name } });
       }
 
-      // Cities
       const cities = [
         { id: 'ouagadougou', name: 'Ouagadougou', stations: JSON.stringify(['Gare Centrale', 'ZAD', 'Wemtenga', 'Ouaga 2000']) },
         { id: 'bobo', name: 'Bobo Dioulasso', stations: JSON.stringify(['Gare Centrale de Bobo', 'Gare de Kôkô', 'Secteur 25']) },
@@ -336,7 +334,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         await this.city.upsert({ where: { id: city.id }, update: {}, create: city });
       }
 
-      // Trips — 14 jours
       const tripTemplates = [
         { companyId: 'saramaya', from: 'Ouagadougou', to: 'Bobo Dioulasso', fromStation: 'Gare Saramaya (ZAD)', toStation: 'Gare Saramaya Bobo', departureTime: '6:30', arrivalTime: '11:30', duration: '5h 00', price: 8500, totalSeats: 72 },
         { companyId: 'saramaya', from: 'Ouagadougou', to: 'Bobo Dioulasso', fromStation: 'Gare Saramaya (ZAD)', toStation: 'Gare Saramaya Bobo', departureTime: '14:30', arrivalTime: '19:30', duration: '5h 00', price: 8500, totalSeats: 72 },
