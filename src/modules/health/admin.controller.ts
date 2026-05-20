@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Headers, UnauthorizedException, Logger } from '@nestjs/common';
+import { Controller, Post, Get, Param, Headers, UnauthorizedException, Logger } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { exec } from 'child_process';
@@ -112,6 +112,28 @@ export class AdminController {
       return { status: 'ok', counts };
     } catch (e: any) {
       return { status: 'error', error: e.message };
+    }
+  }
+
+  /**
+   * GET /admin/get-otp/:phone — Récupère le dernier OTP d'un utilisateur (tests uniquement)
+   */
+  @Get('get-otp/:phone')
+  async getOtp(
+    @Param('phone') phone: string,
+    @Headers('x-internal-secret') secret: string,
+  ) {
+    this.checkSecret(secret);
+    try {
+      const user = await this.prisma.user.findUnique({ where: { phone } });
+      if (!user) return { error: 'User not found' };
+      const otp = await this.prisma.otpCode.findFirst({
+        where: { userId: user.id, used: false },
+        orderBy: { createdAt: 'desc' },
+      });
+      return { phone, userId: user.id, otp: otp?.code, expiresAt: otp?.expiresAt };
+    } catch (e: any) {
+      return { error: e.message };
     }
   }
 
